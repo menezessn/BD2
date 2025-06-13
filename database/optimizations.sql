@@ -67,25 +67,7 @@ CREATE INDEX idx_pagamento_cartao_credito_final_cartao ON ldb.public.pagamento_c
 CREATE INDEX idx_pagamento_pix_chave_pix ON ldb.public.pagamento_pix (chave_pix);
 -- Justificativa: Acelera buscas por chave pix.
 
-/* Desnormalização Estratégica */
--- Não há necessidade imediata de desnormalização estratégica com base nas consultas solicitadas. A estrutura atual é adequada e a desnormalização poderia introduzir redundância e complexidade desnecessárias para este caso.
 
-/* Otimização de Queries */
--- As queries serão otimizadas no momento da criação, utilizando os índices criados e as melhores práticas de SQL.
-
-/* Otimização da Assertion e Trigger */
--- A ASSERTION 'max_pagamentos_cobranca' pode ser custosa em bancos de dados grandes, pois executa uma subconsulta agregada para cada inserção/atualização. É mais eficiente e performático gerenciar essa lógica na aplicação ou através de uma trigger mais específica.
--- A TRIGGER 'tg_atualiza_status_cobranca' está bem definida para o propósito de atualizar o status da cobrança para 'PAGA' após a inserção de um pagamento. No entanto, o 'id_status_cobranca = 2' é um valor mágico. Seria melhor referenciar o status por nome ou ter uma tabela de lookup para evitar problemas se os IDs mudarem.
-
--- Sugestão de melhoria para a trigger (considerando que 'PAGA' tem id 2):
--- CREATE OR REPLACE FUNCTION atualiza_status_cobranca() RETURNS TRIGGER AS $$
--- BEGIN
---     UPDATE ldb.public.cobranca
---     SET id_status_cobranca = (SELECT id_status_cobranca FROM ldb.public.status_cobranca WHERE nome_status_cobranca = 'PAGA')
---     WHERE id_cobranca = NEW.id_cobranca;
---     RETURN NEW;
--- END;
--- $$ LANGUAGE plpgsql;
 
 
 
