@@ -78,11 +78,10 @@ def index():
 
 @app.route('/api/checkins-rede-diario')
 def checkins_rede_diario():
-    """Consulta 1: Check-ins diários de usuários com plano REDE"""
+    """Consulta 1: Check-ins diários de usuários"""
     query = """
     SELECT
         c.data_checkin,
-        CONCAT('Unidade ', u.id_unidade) as nome_unidade,
         COUNT(c.id_checkin) AS total_checkins
     FROM
         ldb.public.checkin c
@@ -93,25 +92,24 @@ def checkins_rede_diario():
     JOIN
         ldb.public.plano p ON a.id_plano = p.id_plano
     GROUP BY
-        c.data_checkin, u.id_unidade
+        c.data_checkin
     ORDER BY
-        c.data_checkin, u.id_unidade;
+        c.data_checkin;
     """
     
     df = execute_query(query)
     if df is not None and not df.empty:
-        chart = create_plotly_chart(df, 'line', 'data_checkin', 'total_checkins', 
-                                  'Check-ins Diários de Usuários REDE por Unidade')
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
+        df["ano_mes"] = pd.to_datetime(df["data_checkin"]).dt.strftime("%Y-%m-%d")
+        return jsonify({'success': True, 'data': df.to_dict(orient='records')})
     else:
         return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
 
 @app.route('/api/checkins-rede-mensal')
 def checkins_rede_mensal():
-    """Consulta 1: Check-ins mensais de usuários com plano REDE"""
+    """Consulta 2: Check-ins mensais de usuários"""
     query = """
     SELECT
-        TO_CHAR(c.data_checkin, 'YYYY-MM') AS ano_mes,
+        DATE_TRUNC('month' , c.data_checkin) AS ano_mes,
         COUNT(c.id_checkin) AS total_checkins
     FROM
         ldb.public.checkin c
@@ -123,109 +121,73 @@ def checkins_rede_mensal():
     
     df = execute_query(query)
     if df is not None and not df.empty:
-        chart = create_plotly_chart(df, 'line', 'ano_mes', 'total_checkins', 
-                                  'Check-ins Mensais de Usuários REDE por Unidade')
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
+        df["ano_mes"] = pd.to_datetime(df["ano_mes"]).dt.strftime("%Y-%m")
+        return jsonify({'success': True, 'data': df.to_dict(orient='records')})
     else:
         return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
 
 @app.route('/api/mau-comparison')
 def mau_comparison():
-    """Consulta 2: MAU vs Usuários Assinados"""
+    """Consulta 3: MAU vs Usuários Assinados"""
     query = """
-    WITH monthly_data AS (
-        SELECT DISTINCT DATE_TRUNC('month', data_checkin) AS mes FROM ldb.public.checkin
-        UNION
-        SELECT DISTINCT DATE_TRUNC('month', data_criacao) AS mes FROM ldb.public.assinatura
-    ),
-    active_users AS (
+    WITH expanded_subscriptions AS (
         SELECT
-            DATE_TRUNC('month', c.data_checkin) AS mes,
-            COUNT(DISTINCT c.id_aluno) as monthly_active_users
-        FROM
-            ldb.public.checkin c
-        GROUP BY
-            DATE_TRUNC('month', c.data_checkin)
-    ),
-    subscribed_users AS (
-        SELECT
-            DATE_TRUNC('month', a.data_criacao) AS mes,
-            COUNT(DISTINCT a.id_aluno) as monthly_subscribed_users
+            a.id_aluno,
+            generate_series(
+                date_trunc('month', a.data_criacao),
+                date_trunc('month', a.data_vigencia),
+                '1 month'::interval
+            )::date AS mes_de_vigencia
         FROM
             ldb.public.assinatura a
         WHERE
             a.id_status_assinatura = 1
-        GROUP BY
-            DATE_TRUNC('month', a.data_criacao)
-    )
-    SELECT
-        TO_CHAR(md.mes, 'YYYY-MM') AS ano_mes,
-        COALESCE(au.monthly_active_users, 0) as monthly_active_users,
-        COALESCE(su.monthly_subscribed_users, 0) as monthly_subscribed_users
-    FROM
-        monthly_data md
-    LEFT JOIN active_users au ON md.mes = au.mes
-    LEFT JOIN subscribed_users su ON md.mes = su.mes
-    ORDER BY
-        md.mes;
-    """
-    
-    df = execute_query(query)
-    if df is not None and not df.empty:
-        # Criar gráfico com duas linhas
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df['ano_mes'], y=df['monthly_active_users'], 
-                                mode='lines+markers', name='Usuários Ativos'))
-        fig.add_trace(go.Scatter(x=df['ano_mes'], y=df['monthly_subscribed_users'], 
-                                mode='lines+markers', name='Usuários Assinados'))
-        fig.update_layout(title='MAU vs Usuários Assinados', template='plotly_white')
-        
-        chart = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
-    else:
-        return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
-
-@app.route('/api/mau-vallet-unidade')
-def mau_vallet_unidade():
-    """Consulta 3: MAU para unidades com Vallet e assinaturas UNIDADE"""
-    query = """
-    WITH monthly_data AS (
-        SELECT DISTINCT DATE_TRUNC('month', data_checkin) AS mes FROM ldb.public.checkin
     ),
-    vallet_unidade_users AS (
+
+    subscribed_users AS (
         SELECT
-            DATE_TRUNC('month', c.data_checkin) AS mes,
-            COUNT(DISTINCT c.id_aluno) as mau_vallet_unidade
+            mes_de_vigencia AS mes,
+            COUNT(DISTINCT id_aluno) AS monthly_subscribed_users
         FROM
-            ldb.public.checkin c
-        JOIN
-            ldb.public.unidade_facilidade uf ON c.id_unidade = uf.id_unidade
-        JOIN
-            ldb.public.facilidade f ON uf.id_facilidade = f.id_facilidade
-        JOIN
-            ldb.public.assinatura a ON c.id_aluno = a.id_aluno AND c.id_unidade = a.id_unidade
-        JOIN
-            ldb.public.plano p ON a.id_plano = p.id_plano
-        WHERE
-            f.nome_facilidade = 'Vallet' AND p.nome_plano = 'UNIDADE'
+            expanded_subscriptions
         GROUP BY
-            DATE_TRUNC('month', c.data_checkin)
+            mes_de_vigencia
+    ),
+
+    active_users AS (
+        SELECT
+            date_trunc('month', data_checkin)::date AS mes,
+            COUNT(DISTINCT id_aluno) AS monthly_active_users
+        FROM
+            ldb.public.checkin
+        GROUP BY
+            mes
+    ),
+
+    monthly_timeline AS (
+        SELECT mes FROM subscribed_users
+        UNION
+        SELECT mes FROM active_users
     )
+
     SELECT
-        TO_CHAR(md.mes, 'YYYY-MM') AS ano_mes,
-        COALESCE(vu.mau_vallet_unidade, 0) as mau_vallet_unidade
+        DATE_TRUNC('month', mt.mes) AS ano_mes,
+        COALESCE(au.monthly_active_users, 0) AS monthly_active_users,
+        COALESCE(su.monthly_subscribed_users, 0) AS monthly_subscribed_users
     FROM
-        monthly_data md
-    LEFT JOIN vallet_unidade_users vu ON md.mes = vu.mes
+        monthly_timeline mt
+    LEFT JOIN active_users au ON mt.mes = au.mes
+    LEFT JOIN subscribed_users su ON mt.mes = su.mes
+    WHERE
+        mt.mes IS NOT NULL
     ORDER BY
-        md.mes;
+    mt.mes;
     """
     
     df = execute_query(query)
     if df is not None and not df.empty:
-        chart = create_plotly_chart(df, 'line', 'ano_mes', 'mau_vallet_unidade', 
-                                  'MAU para Unidades com Vallet e Assinaturas UNIDADE')
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
+        df["ano_mes"] = pd.to_datetime(df["ano_mes"]).dt.strftime("%Y-%m")
+        return jsonify({'success': True, 'data': df.to_dict(orient='records')})
     else:
         return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
 
@@ -234,7 +196,6 @@ def cancelamentos_motivo():
     """Consulta 4: Cancelamentos por motivo"""
     query = """
     SELECT
-        TO_CHAR(sc.data_solicitacao, 'YYYY-MM') AS ano_mes,
         mc.descricao_motivo_cancelamento,
         COUNT(sc.id_solicitacao_cancelamento) AS total_cancelamentos
     FROM
@@ -242,16 +203,14 @@ def cancelamentos_motivo():
     JOIN
         ldb.public.motivo_cancelamento mc ON sc.id_motivo_cancelamento = mc.id_motivo_cancelamento
     GROUP BY
-        ano_mes, mc.descricao_motivo_cancelamento
+        mc.descricao_motivo_cancelamento
     ORDER BY
-        ano_mes, total_cancelamentos DESC;
+        total_cancelamentos DESC;
     """
     
     df = execute_query(query)
     if df is not None and not df.empty:
-        chart = create_plotly_chart(df, 'bar', 'descricao_motivo_cancelamento', 'total_cancelamentos', 
-                                  'Cancelamentos por Motivo')
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
+        return jsonify({'success': True, 'data': df.to_dict(orient='records')})
     else:
         return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
 
@@ -275,9 +234,7 @@ def top_unidades_checkins():
     
     df = execute_query(query)
     if df is not None and not df.empty:
-        chart = create_plotly_chart(df, 'bar', 'nome_unidade', 'total_checkins', 
-                                  'Top 10 Unidades com Mais Check-ins')
-        return jsonify({'success': True, 'chart': chart, 'data': df.to_dict('records')})
+        return jsonify({'success': True, 'data': df.to_dict(orient='records')})
     else:
         return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
     

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Academia - Dashboard</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -185,14 +186,13 @@
         <div class="controls">
             <h2>Atualizar Dashboard</h2>
             <div class="btn-group">
-                <button class="control-btn active" onclick="loadAllCharts()">Carregar Todos os Gráficos</button>
-                <button class="control-btn" onclick="loadChart('checkins-rede-diario')">Check-ins Diários REDE</button>
-                <button class="control-btn" onclick="loadChart('checkins-rede-mensal')">Check-ins Mensais REDE</button>
-                <button class="control-btn" onclick="loadChart('mau-comparison')">MAU Comparativo</button>
-                <button class="control-btn" onclick="loadChart('mau-vallet-unidade')">MAU Vallet/Unidade</button>
-                <button class="control-btn" onclick="loadChart('cancelamentos-motivo')">Cancelamentos</button>
-                <button class="control-btn" onclick="loadChart('top-unidades-checkins')">Top Unidades</button>
-                <button class="control-btn" onclick="loadChart('bottom-unidades-checkins')">Top Unidades</button>
+                <button class="control-btn active" onclick="reloadAll()">Recarregar Todos os Gráficos</button>
+                <button class="control-btn" onclick="createMultiLineChart('checkins-rede-diario', 'checkinChartDaily', checkInMonthlyConfig)">Check-ins Diários REDE</button>
+                <button class="control-btn" onclick="createMultiLineChart('checkins-rede-mensal', 'checkinChart', checkInDailyConfig)">Check-ins Mensais REDE</button>
+                <button class="control-btn" onclick="createMultiLineChart('mau-comparison', 'mauSubChart', mauSubscriberConfig);">MAU Comparativo</button>
+                <button class="control-btn" onclick="createGenericBarChart( 'cancelamentos-motivo', 'cancelamentoChart', configCancelamentos)">Cancelamentos</button>
+                <button class="control-btn" onclick="createGenericBarChart( 'top-unidades-checkins', 'topUnidadesChart', configTopUnidades)">Top Unidades</button>
+                <button class="control-btn" onclick="createGenericBarChart( 'bottom-unidades-checkins', 'bottomUnidadesChart', configBottomUnidades)">Top Unidades</button>
             </div>
         </div>
 
@@ -200,70 +200,60 @@
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">Check-ins Diários de Usuários REDE</div>
-                    <button class="refresh-btn" onclick="loadChart('checkins-rede-diario')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createMultiLineChart('checkins-rede-diario', 'checkinChartDaily', checkInMonthlyConfig)">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-checkins-rede-diario">
-                    <div class="loading">Carregando dados...</div>
+                    <canvas id="checkinChartDaily" width="600" height="400"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">Check-ins Mensais de Usuários REDE</div>
-                    <button class="refresh-btn" onclick="loadChart('checkins-rede-mensal')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createMultiLineChart('checkins-rede-mensal', 'checkinChart', checkInDailyConfig)">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-checkins-rede-mensal">
-                    <div class="loading">Carregando dados...</div>
+                    <canvas id="checkinChart" width="600" height="400"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">MAU vs Usuários Assinados</div>
-                    <button class="refresh-btn" onclick="loadChart('mau-comparison')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createMultiLineChart('mau-comparison', 'mauSubChart', mauSubscriberConfig);">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-mau-comparison">
-                    <div class="loading">Carregando dados...</div>
-                </div>
-            </div>
-
-            <div class="chart-container">
-                <div class="chart-header">
-                    <div class="chart-title">MAU Vallet/Unidade</div>
-                    <button class="refresh-btn" onclick="loadChart('mau-vallet-unidade')">🔄 Atualizar</button>
-                </div>
-                <div class="chart-content" id="chart-mau-vallet-unidade">
-                    <div class="loading">Carregando dados...</div>
+                    <canvas id="mauSubChart" width="600" height="400"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">Cancelamentos por Motivo</div>
-                    <button class="refresh-btn" onclick="loadChart('cancelamentos-motivo')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createGenericBarChart( 'cancelamentos-motivo', 'cancelamentoChart', configCancelamentos)">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-cancelamentos-motivo">
-                    <div class="loading">Carregando dados...</div>
+                    <canvas id="cancelamentoChart" width="600" height="400"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">Top Unidades por Check-ins</div>
-                    <button class="refresh-btn" onclick="loadChart('top-unidades-checkins')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createGenericBarChart( 'top-unidades-checkins', 'topUnidadesChart', configTopUnidades)">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-top-unidades-checkins">
-                    <div class="loading">Carregando dados...</div>
+                     <canvas id="topUnidadesChart" width="600" height="400"></canvas>
                 </div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-header">
                     <div class="chart-title">Top Unidades com menos Check-ins</div>
-                    <button class="refresh-btn" onclick="loadChart('bottom-unidades-checkins')">🔄 Atualizar</button>
+                    <button class="refresh-btn" onclick="createGenericBarChart( 'bottom-unidades-checkins', 'bottomUnidadesChart', configBottomUnidades)">🔄 Atualizar</button>
                 </div>
                 <div class="chart-content" id="chart-bottom-unidades-checkins">
-                    <div class="loading">Carregando dados...</div>
+                    <canvas id="bottomUnidadesChart" width="600" height="400"></canvas>
                 </div>
             </div>
 
@@ -271,54 +261,6 @@
     </div>
 
     <script>
-        // Função para carregar um gráfico específico
-        async function loadChart(chartType) {
-            const chartContainer = document.getElementById(`chart-${chartType}`);
-            chartContainer.innerHTML = '<div class="loading">Carregando dados...</div>';
-
-            try {
-                const response = await fetch(`/api/${chartType}`);
-                const data = await response.json();
-
-                if (data.success && data.chart) {
-                    const chartData = JSON.parse(data.chart);
-                    Plotly.newPlot(`chart-${chartType}`, chartData.data, chartData.layout, {
-                        responsive: true,
-                        displayModeBar: true,
-                        modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
-                        displaylogo: false
-                    });
-                } else {
-                    chartContainer.innerHTML = `<div class="error">❌ ${data.message || 'Erro ao carregar dados'}</div>`;
-                }
-            } catch (error) {
-                console.error('Erro ao carregar gráfico:', error);
-                chartContainer.innerHTML = '<div class="error">❌ Erro de conexão com o servidor</div>';
-            }
-        }
-
-        // Função para carregar todos os gráficos
-        function loadAllCharts() {
-            const chartTypes = [
-                'checkins-rede-diario',
-                'checkins-rede-mensal',
-                'mau-comparison',
-                'mau-vallet-unidade',
-                'cancelamentos-motivo',
-                'top-unidades-checkins',
-                'bottom-unidades-checkins'
-            ];
-
-            chartTypes.forEach(chartType => {
-                loadChart(chartType);
-            });
-        }
-
-        // Carregar todos os gráficos quando a página carregar
-        document.addEventListener('DOMContentLoaded', function() {
-            loadAllCharts();
-        });
-
         // Adicionar efeito de clique nos botões de controle
         document.querySelectorAll('.control-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -327,6 +269,7 @@
             });
         });
     </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script> 
 </body>
 </html>
 
